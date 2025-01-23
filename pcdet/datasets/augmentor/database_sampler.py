@@ -240,11 +240,18 @@ class DataBaseSampler(object):
                 gt_boxes: (N, 7 + C) [x, y, z, dx, dy, dz, heading, ...]
 
         Returns:
-
+            Updated data_dict with augmented data if applicable
         """
-        
-        gt_boxes = data_dict['gt_boxes']
-        gt_names = data_dict['gt_names'].astype(str)
+        # Check if ground truth boxes or sample groups exist
+        gt_boxes = data_dict.get('gt_boxes', None)
+        gt_names = data_dict.get('gt_names', None)
+
+        # Skip augmentation if no gt_boxes, gt_names, or sample groups exist
+        if gt_boxes is None or gt_names is None or len(self.sample_groups) == 0:
+            print(f"Skipping augmentation for file: {data_dict.get('file_name', 'Unknown')}")
+            return data_dict
+
+        gt_names = gt_names.astype(str)
         existed_boxes = gt_boxes
         total_valid_sampled_dict = []
 
@@ -252,13 +259,20 @@ class DataBaseSampler(object):
             if self.limit_whole_scene:
                 num_gt = np.sum(class_name == gt_names)
                 sample_group['sample_num'] = str(int(self.sample_class_num[class_name]) - num_gt)
+
             if int(sample_group['sample_num']) > 0:
                 sampled_dict = self.sample_with_fixed_number(class_name, sample_group)
 
+                # Skip augmentation if sampled_dict is empty
+                if len(sampled_dict) == 0:
+                    print(f"No samples available for class '{class_name}' in file: {data_dict.get('file_name', 'Unknown')}")
+                    continue
+                
                 sampled_boxes1 = np.stack([x['box3d_lidar'] for x in sampled_dict], axis=0).astype(np.float32)
 
                 if self.sampler_cfg.get('DATABASE_WITH_FAKELIDAR', False):
-                    sampled_boxes1 = box_utils.boxes3d_kitti_fakelidar_to_lidar(sampled_boxes)
+                    sampled_boxes1 = box_utils.boxes3d_kitti_fakelidar_to_lidar(sampled_boxes1)
+
                 sampled_boxes = copy.deepcopy(sampled_boxes1)
                 iou1 = iou3d_nms_utils.boxes_bev_iou_cpu(sampled_boxes[:, 0:7], existed_boxes[:, 0:7])
                 iou2 = iou3d_nms_utils.boxes_bev_iou_cpu(sampled_boxes[:, 0:7], sampled_boxes[:, 0:7])
@@ -273,12 +287,14 @@ class DataBaseSampler(object):
                 total_valid_sampled_dict.extend(valid_sampled_dict)
 
         sampled_gt_boxes = existed_boxes[gt_boxes.shape[0]:, :]
-        if total_valid_sampled_dict.__len__() > 0:
-
+        
+        if len(total_valid_sampled_dict) > 0:
             data_dict = self.add_sampled_boxes_to_scene(data_dict, sampled_gt_boxes, total_valid_sampled_dict)
 
-
         return data_dict
+    
+
+
 
 
 class DADataBaseSampler(object):
@@ -406,7 +422,9 @@ class DADataBaseSampler(object):
         nn = random.choices(new_points.tolist(), k=int((1 - dis / 100) ** 3 * 300))
         return np.array(nn), new_box
 
-    def random_drop_out(self, points, rand_noise=0.2, offset=0.3):
+    def random_drop_out(self, points, rand_noise=0.2, offset=0.3, attempts=0, max_attempts=10):
+        if attempts >= max_attempts:
+            return points  # Stop recursion after max_attempts
 
         rand = np.random.choice([0, 1, 2, 3])
         new_points = []
@@ -421,8 +439,8 @@ class DADataBaseSampler(object):
                 new_points.append(points[i])
 
         new_points = np.array(new_points)
-        if len(new_points) < 5:
-            return self.random_drop_out(points, rand_noise, offset)
+        if len(new_points) < 7:
+            return self.random_drop_out(points, rand_noise, offset, attempts + 1, max_attempts)
 
         return new_points
 
