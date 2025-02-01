@@ -1,4 +1,4 @@
-CLASS_NAMES: ['Car']
+CLASS_NAMES: ['Car', 'Pedestrian', 'Cyclist', 'Motorcyclist', 'Truck', 'Bus']
 
 DATA_CONFIG:
     _BASE_CONFIG_: cfgs/dataset_configs/kitti_dataset.yaml
@@ -13,7 +13,7 @@ DATA_CONFIG:
 
     INFO_PATH: {
         'train': [kitti_infos_train.pkl],
-        'test': [kitti_infos_val.pkl],
+        'test': [example_rotation.pkl],
     }
 
     DATA_AUGMENTOR:
@@ -24,11 +24,11 @@ DATA_CONFIG:
               DB_INFO_PATH:
                   - kitti_dbinfos_train.pkl
               PREPARE: {
-                  filter_by_min_points: ['Car:5', 'Pedestrian:5', 'Cyclist:5'],
-                  filter_by_difficulty: [-1],
+                  filter_by_min_points: ['Car:5', 'Pedestrian:5', 'Cyclist:5', 'Truck:5', 'Bus:10', 'Motorcyclist:4'],
+                  filter_by_difficulty: [],
               }
 
-              SAMPLE_GROUPS: ['Car:10', 'Pedestrian:10', 'Cyclist:10']
+              SAMPLE_GROUPS: ['Car:15','Pedestrian:10', 'Cyclist:10',  'Truck:10', 'Bus:10', 'Motorcyclist:4']
               NUM_POINT_FEATURES: 4
               DATABASE_WITH_FAKELIDAR: False
               REMOVE_EXTRA_WIDTH: [0.0, 0.0, -0.2]
@@ -39,11 +39,11 @@ DATA_CONFIG:
               DB_INFO_PATH:
                 - kitti_dbinfos_train.pkl
               PREPARE: {
-                filter_by_min_points: ['Car:5'],
-                filter_by_difficulty: [-1],
+              filter_by_min_points: ['Car:5', 'Pedestrian:5', 'Cyclist:5', 'Truck:5', 'Bus:10', 'Motorcyclist:4'],
+              filter_by_difficulty: [],
               }
-
-              SAMPLE_GROUPS: ['Car:10']
+              
+              SAMPLE_GROUPS: ['Car:15','Pedestrian:10', 'Cyclist:10',  'Truck:10', 'Bus:10', 'Motorcyclist:4']
 
               MIN_SAMPLING_DIS: 0
               MAX_SAMPLING_DIS: 20
@@ -85,34 +85,32 @@ DATA_CONFIG:
           ALONG_AXIS_LIST: [0, 1, 1, 0, 1, 0]
         - NAME: world_scaling
           WORLD_SCALE_RANGE: [ 0.98, 1.02, 1., 0.98, 1.02, 1.]
+  
+POINT_FEATURE_ENCODING: {
+    encoding_type: absolute_coordinates_encoding_mm,
+    used_feature_list: ['x', 'y', 'z', 'intensity'],
+    src_feature_list: ['x', 'y', 'z', 'intensity'],
+    num_features: 4
+}
 
+DATA_PROCESSOR:
+    - NAME: mask_points_and_boxes_outside_range
+      REMOVE_OUTSIDE_BOXES: True
 
+    - NAME: shuffle_points
+      SHUFFLE_ENABLED: {
+        'train': True,
+        'test': True
+      }
 
-    POINT_FEATURE_ENCODING: {
-        encoding_type: absolute_coordinates_encoding_mm,
-        used_feature_list: ['x', 'y', 'z', 'intensity'],
-        src_feature_list: ['x', 'y', 'z', 'intensity'],
-        num_features: 4
-    }
-
-    DATA_PROCESSOR:
-        - NAME: mask_points_and_boxes_outside_range
-          REMOVE_OUTSIDE_BOXES: True
-
-        - NAME: shuffle_points
-          SHUFFLE_ENABLED: {
-            'train': True,
-            'test': True
-          }
-
-        - NAME: transform_points_to_voxels
-          VOXEL_SIZE: [0.05, 0.05, 0.05]  
-          MAX_POINTS_PER_VOXEL: 5
-          MAX_NUMBER_OF_VOXELS: {
-            'train': 16000,
-            'test': 40000
-          }
-
+    - NAME: transform_points_to_voxels
+      VOXEL_SIZE: [0.05, 0.05, 0.05]  
+      MAX_POINTS_PER_VOXEL: 5
+      MAX_NUMBER_OF_VOXELS: {
+        'train': 16000,
+        'test': 40000
+      }
+      
 MODEL:
     NAME: VoxelRCNN
 
@@ -124,7 +122,7 @@ MODEL:
         NAME: TeVoxelBackBone8x
         NUM_FILTERS: [16, 32, 64, 64]
         RETURN_NUM_FEATURES_AS_DICT: True
-        OUT_FEATURES: 64
+        OUT_FEATURES: 128
 
     MAP_TO_BEV:
         NAME: BEVPool
@@ -159,7 +157,58 @@ MODEL:
                 'feature_map_stride': 8,
                 'matched_threshold': 0.6,
                 'unmatched_threshold': 0.45
-            }
+            },
+            {
+            'class_name': 'Pedestrian',
+            'anchor_sizes': [[ 0.8, 0.6, 1.73 ]],
+            'anchor_rotations': [ 0, 1.57 ],
+            'anchor_bottom_heights': [ -0.6 ],
+            'align_center': False,
+            'feature_map_stride': 8,
+            'matched_threshold': 0.5,
+            'unmatched_threshold': 0.35
+          },
+          {
+            'class_name': 'Cyclist',
+            'anchor_sizes': [[ 1.76, 0.6, 1.73 ]],
+            'anchor_rotations': [ 0, 1.57 ],
+            'anchor_bottom_heights': [ -0.6 ],
+            'align_center': False,
+            'feature_map_stride': 8,
+            'matched_threshold': 0.5,
+            'unmatched_threshold': 0.35
+          },
+          {
+        'class_name': 'Motorcyclist',
+        'anchor_sizes': [[1.6, 1.2, 1.6]], 
+        'anchor_rotations': [0, 1.57],
+        'anchor_bottom_heights': [-0.6], 
+        'align_center': False,
+        'feature_map_stride': 8,
+        'matched_threshold': 0.5,
+        'unmatched_threshold': 0.35
+         },
+         {
+        'class_name': 'Truck',
+        'anchor_sizes': [[4.8, 2.8, 3]], 
+        'anchor_rotations': [0, 1.57],
+        'anchor_bottom_heights': [-1.5], 
+        'align_center': False,
+        'feature_map_stride': 8,
+        'matched_threshold': 0.6,
+        'unmatched_threshold': 0.45
+         },
+         {
+        'class_name': 'Bus',
+        'anchor_sizes': [[9.0, 3.0, 3.8]], # Example sizes, adjust as needed
+        'anchor_rotations': [0, 1.57],
+        'anchor_bottom_heights': [-1.5], 
+        'align_center': False,
+        'feature_map_stride': 8,
+        'matched_threshold': 0.6,
+        'unmatched_threshold': 0.45
+        }
+          
         ]
         TARGET_ASSIGNER_CONFIG:
             NAME: AxisAlignedTargetAssigner
@@ -228,15 +277,14 @@ MODEL:
             FG_RATIO: 0.5
             SAMPLE_ROI_BY_EACH_CLASS: True
             CLS_SCORE_TYPE: roi_iou_x
-            CLS_FG_THRESH: [0.75]
-            CLS_BG_THRESH: [0.25]
+            CLS_FG_THRESH: [0.75, 0.65, 0.65, 0.65, 0.65, 0.65]
+            CLS_BG_THRESH: [0.25, 0.15, 0.15, 0.15, 0.15, 0.15]
             CLS_BG_THRESH_LO: 0.1
             HARD_BG_RATIO: 0.8
-            REG_FG_THRESH: [0.55]
+            REG_FG_THRESH: [0.55, 0.5, 0.5, 0.5, 0.5, 0.5]
             ENABLE_HARD_SAMPLING: True
-            HARD_SAMPLING_THRESH: [0.5]
-            HARD_SAMPLING_RATIO: [0.5]
-
+            HARD_SAMPLING_THRESH: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+            HARD_SAMPLING_RATIO: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
 
         LOSS_CONFIG:
             CLS_LOSS: BinaryCrossEntropy
@@ -253,7 +301,7 @@ MODEL:
 
     POST_PROCESSING:
         RECALL_THRESH_LIST: [0.3, 0.5, 0.7]
-        SCORE_THRESH: 0.25
+        SCORE_THRESH: 0.3
         OUTPUT_RAW_SCORE: False
         EVAL_METRIC: kitti
 
@@ -263,8 +311,8 @@ MODEL:
             NMS_THRESH: 0.1
             NMS_PRE_MAXSIZE: 4096
             NMS_POST_MAXSIZE: 500
-
-
+            
+            
 OPTIMIZATION:
     BATCH_SIZE_PER_GPU: 2
     NUM_EPOCHS: 40
