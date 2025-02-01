@@ -9,14 +9,51 @@ from pathlib import Path
 import numpy as np
 import torch
 from tensorboardX import SummaryWriter
-
+import math
+import pickle
 from eval_utils import eval_utils
 from pcdet.config import cfg, cfg_from_list, cfg_from_yaml_file, log_config_to_file
 from pcdet.datasets import build_dataloader
 from pcdet.models import build_network
 from pcdet.utils import common_utils
 import warnings
+
 warnings.filterwarnings("ignore")
+def rotate_points(points, angle_degrees):
+    # Convert angle to radians
+    angle_radians = np.radians(angle_degrees)
+    
+    # Create the rotation matrix for the XY plane
+    rotation_matrix = np.array([
+        [np.cos(angle_radians), -np.sin(angle_radians)],
+        [np.sin(angle_radians), np.cos(angle_radians)]
+    ])
+    
+    # Rotate the x and y coordinates
+    xy_rotated = np.dot(points[:, :2], rotation_matrix.T)
+    
+    # Keep z and intensity values the same
+    rotated_points = np.hstack((xy_rotated, points[:, 2:]))
+    
+    return rotated_points
+
+def save_bin_file(points, file_path):
+    points.astype(np.float32).tofile(file_path)
+
+
+    
+
+
+def load_bin_file(file_path):
+    # Load the .bin file and reshape it to a (-1, 4) array (assuming x, y, z, intensity)
+    points = np.fromfile(file_path, dtype=np.float32).reshape(-1, 4)
+    return points
+    
+    return results
+
+
+
+
 
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
@@ -108,7 +145,7 @@ def repeat_eval_ckpt(model, test_loader, args, eval_output_dir, logger, ckpt_dir
 
         # start evaluation
         cur_result_dir = eval_output_dir / ('epoch_%s' % cur_epoch_id) / cfg.DATA_CONFIG.DATA_SPLIT['test']
-        tb_dict = eval_utils.eval_one_epoch(
+        tb_dict, path_pkl = eval_utils.eval_one_epoch(
             cfg, model, test_loader, cur_epoch_id, logger, dist_test=dist_test,
             result_dir=cur_result_dir, save_to_file=args.save_to_file
         )
@@ -121,6 +158,13 @@ def repeat_eval_ckpt(model, test_loader, args, eval_output_dir, logger, ckpt_dir
         with open(ckpt_record_file, 'a') as f:
             print('%s' % cur_epoch_id, file=f)
         logger.info('Epoch %s has been evaluated' % cur_epoch_id)
+        
+        txt_file_path = '/data1/ted/TED/output/models/kitti/TED-S/default/eval/epoch_40/val/default/formatted_results_360_full.txt'  # Output text file path
+	
+        results = load_results(path_pkl)
+        save_results_to_txt(results, txt_file_path)  
+        print("HI")
+        
 
 
 def main():
@@ -185,7 +229,25 @@ def main():
             repeat_eval_ckpt(model, test_loader, args, eval_output_dir, logger, ckpt_dir, dist_test=dist_test)
         else:
             eval_single_ckpt(model, test_loader, args, eval_output_dir, logger, epoch_id, dist_test=dist_test)
+    
+    
+    
+    
 
 
 if __name__ == '__main__':
+    preferred_directory = '/home/ted/TED/data/kitti/training/velodyne/'
+
+    # Load the original point cloud data
+    file_path = os.path.join(preferred_directory, '000000.bin')
+    points = load_bin_file(file_path)
+
+    # Rotate 120 degrees clockwise (negative angle)
+    points_clockwise = rotate_points(points, -120)
+    save_bin_file(points_clockwise, os.path.join(preferred_directory, '000001.bin'))
+
+    # Rotate 120 degrees counterclockwise (positive angle)
+    points_counterclockwise = rotate_points(points, 120)
+    save_bin_file(points_counterclockwise, os.path.join(preferred_directory, '000002.bin'))
+    
     main()
