@@ -1,5 +1,6 @@
 # TED360
 A 360 degree lidar perception model trained on Ouster and Kitti data.
+Trained model file is in the hugging face library https://huggingface.co/pranavdarshan/TED360/tree/main
 
 # Transformation-Equivariant 3D Object Detection for Autonomous Driving
 This is a improved version of [TED](https://arxiv.org/abs/2211.11962) by a multiple refinement design. 
