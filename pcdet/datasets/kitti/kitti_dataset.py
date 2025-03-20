@@ -1,5 +1,6 @@
 import copy
 import pickle
+import importlib
 
 import numpy as np
 from skimage import io
@@ -23,11 +24,11 @@ class KittiDataset(DatasetTemplate):
             dataset_cfg=dataset_cfg, class_names=class_names, training=training, root_path=root_path, logger=logger
         )
         self.split = self.dataset_cfg.DATA_SPLIT[self.mode]
-        self.root_split_path = self.root_path / ('training' if self.split != 'test' else 'testing')
+        self.root_split_path = self.root_path
 
         split_dir = self.root_path / 'ImageSets' / (self.split + '.txt')
         self.sample_id_list = [x.strip() for x in open(split_dir).readlines()] if split_dir.exists() else None
-
+	
         self.kitti_infos = []
         self.include_kitti_data(self.mode)
 
@@ -54,19 +55,21 @@ class KittiDataset(DatasetTemplate):
             dataset_cfg=self.dataset_cfg, class_names=self.class_names, training=self.training, root_path=self.root_path, logger=self.logger
         )
         self.split = split
-        self.root_split_path = self.root_path / ('training' if self.split != 'test' else 'testing')
+        self.root_split_path = self.root_path 
 
         split_dir = self.root_path / 'ImageSets' / (self.split + '.txt')
         self.sample_id_list = [x.strip() for x in open(split_dir).readlines()] if split_dir.exists() else None
 
     def get_lidar(self, idx):
-        lidar_file = self.root_split_path / 'velodyne' / ('%s.bin' % idx)
-        assert lidar_file.exists()
-        return np.fromfile(str(lidar_file), dtype=np.float32).reshape(-1, 4)
+        lidar_file = self.root_split_path / ('%s.bin' % idx)
+        if(lidar_file.exists()):
+            return np.fromfile(str(lidar_file), dtype=np.float32).reshape(-1, 4)
+        else:
+            return None
 
     def get_image_shape(self, idx):
         img_file = self.root_split_path / 'image_2' / ('%s.png' % idx)
-        assert img_file.exists()
+        
         return np.array(io.imread(img_file).shape[:2], dtype=np.int32)
 
     def get_label(self, idx):
@@ -75,7 +78,7 @@ class KittiDataset(DatasetTemplate):
         return object3d_kitti.get_objects_from_label(label_file)
 
     def get_calib(self, idx):
-        calib_file = self.root_split_path / 'calib' / ('%s.txt' % idx)
+        calib_file = self.root_split_path / 'calib' / ('000000.txt')
         assert calib_file.exists()
         return calibration_kitti.Calibration(calib_file)
 
@@ -120,14 +123,17 @@ class KittiDataset(DatasetTemplate):
         import concurrent.futures as futures
 
         def process_single_scene(sample_idx):
-            print('%s sample_idx: %s' % (self.split, sample_idx))
+            lidar_data = self.get_lidar(sample_idx)
+            if lidar_data is None:
+                return
+            
             info = {}
             pc_info = {'num_features': 4, 'lidar_idx': sample_idx}
             info['point_cloud'] = pc_info
 
-            image_info = {'image_idx': sample_idx, 'image_shape': self.get_image_shape(sample_idx)}
+            image_info = {'image_idx': sample_idx, 'image_shape':[375, 1242]}
             info['image'] = image_info
-            calib = self.get_calib(sample_idx)
+            calib = self.get_calib(000000)
 
             P2 = np.concatenate([calib.P2, np.array([[0., 0., 0., 1.]])], axis=0)
             R0_4x4 = np.zeros([4, 4], dtype=calib.R0.dtype)
@@ -188,7 +194,9 @@ class KittiDataset(DatasetTemplate):
         sample_id_list = sample_id_list if sample_id_list is not None else self.sample_id_list
         with futures.ThreadPoolExecutor(num_workers) as executor:
             infos = executor.map(process_single_scene, sample_id_list)
-        return list(infos)
+        info = list(infos)
+        info = [x for x in info if x is not None]    
+        return info
 
     def create_groundtruth_database(self, info_path=None, used_classes=None, split='train'):
         import torch
@@ -319,13 +327,7 @@ class KittiDataset(DatasetTemplate):
                     loc = single_pred_dict['location']
                     dims = single_pred_dict['dimensions']  # lhw -> hwl
 
-                    for idx in range(len(bbox)):
-                        print('%s -1 -1 %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f'
-                              % (single_pred_dict['name'][idx], single_pred_dict['alpha'][idx],
-                                 bbox[idx][0], bbox[idx][1], bbox[idx][2], bbox[idx][3],
-                                 dims[idx][1], dims[idx][2], dims[idx][0], loc[idx][0],
-                                 loc[idx][1], loc[idx][2], single_pred_dict['rotation_y'][idx],
-                                 single_pred_dict['score'][idx]), file=f)
+                    
 
         return annos
 
@@ -417,6 +419,7 @@ def create_kitti_infos(dataset_cfg, class_names, data_path, save_path, workers=4
     print('Kitti info val file is saved to %s' % val_filename)
 
     with open(trainval_filename, 'wb') as f:
+    
         pickle.dump(kitti_infos_train + kitti_infos_val, f)
     print('Kitti info trainval file is saved to %s' % trainval_filename)
 
@@ -443,7 +446,7 @@ if __name__ == '__main__':
         ROOT_DIR = (Path(__file__).resolve().parent / '../../../').resolve()
         create_kitti_infos(
             dataset_cfg=dataset_cfg,
-            class_names=['Car', 'Pedestrian', 'Cyclist'],
+            class_names=['Car', 'Pedestrian', 'Cyclist', 'Motorcyclist', 'Truck', 'Bus'],
             data_path=ROOT_DIR / 'data' / 'kitti',
             save_path=ROOT_DIR / 'data' / 'kitti'
         )
