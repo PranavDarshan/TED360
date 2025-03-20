@@ -2,6 +2,25 @@
 A 360 degree lidar perception model trained on Ouster and Kitti data.
 Trained model file is in the hugging face library https://huggingface.co/pranavdarshan/TED360/tree/main
 
+## STEPS FOR INFERENCE
+
+1. Create a folder for the data to be tested under the data folder.
+2. Assume the folder name is test.
+3. Under this folder add another folder called calib.
+4. Under the calib folder add 000000.txt
+5. Now add the testing .bin file in the folder and rename it as 000000.bin
+6. Ensure that the example_rotation.pkl file is in the test directory.
+7. Ensure that you are in the tools folder.
+8. Now run the model for inferernce using the command ```python test.py --cfg_file cfgs/models/kitti/TED-S1.yaml --ckpt ted360.pth --root_path ../data/test```
+9. The structure of the file is :
+```
+data/
+│── test/
+│   ├── 000000.bin
+│   ├── example_rotation.pkl
+│   ├── calib/
+│   │   ├── 000000.txt
+``` 
 # Transformation-Equivariant 3D Object Detection for Autonomous Driving
 This is a improved version of [TED](https://arxiv.org/abs/2211.11962) by a multiple refinement design. 
 This code is mainly based on [OpenPCDet](https://github.com/open-mmlab/OpenPCDet) and [CasA](https://github.com/hailanyi/CasA), some codes are from 
