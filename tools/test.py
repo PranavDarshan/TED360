@@ -68,8 +68,10 @@ def parse_config():
     parser.add_argument('--local_rank', type=int, default=0, help='local rank for distributed training')
     parser.add_argument('--set', dest='set_cfgs', default=None, nargs=argparse.REMAINDER,
                         help='set extra config keys if needed')
+                        
 
     parser.add_argument('--max_waiting_mins', type=int, default=30, help='max waiting minutes')
+    parser.add_argument('--root_path', type=str, default=None, help='specify the root path')
     parser.add_argument('--start_epoch', type=int, default=0, help='')
     parser.add_argument('--eval_tag', type=str, default='default', help='eval tag for this experiment')
     parser.add_argument('--eval_all', action='store_true', default=False, help='whether to evaluate all checkpoints')
@@ -218,6 +220,7 @@ def main():
 
     test_set, test_loader, sampler = build_dataloader(
         dataset_cfg=cfg.DATA_CONFIG,
+        root_path = Path(args.root_path) if args.root_path is not None else None,
         class_names=cfg.CLASS_NAMES,
         batch_size=args.batch_size,
         dist=dist_test, workers=args.workers, logger=logger, training=False
@@ -236,8 +239,10 @@ def main():
 
 
 if __name__ == '__main__':
-    preferred_directory = '/home/ted/TED/data/kitti/training/velodyne/'
-
+	
+    args, cfg = parse_config()
+    preferred_directory = args.root_path
+	
     # Load the original point cloud data
     file_path = os.path.join(preferred_directory, '000000.bin')
     points = load_bin_file(file_path)
