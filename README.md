@@ -11,7 +11,7 @@ Trained model file is in the hugging face library https://huggingface.co/pranavd
 5. Now add the testing .bin file in the folder and rename it as 000000.bin
 6. Ensure that the example_rotation.pkl file is in the test directory.
 7. Ensure that you are in the tools folder.
-8. Now run the model for inferernce using the command ```python test.py --cfg_file cfgs/models/kitti/TED-S1.yaml --ckpt ted360.pth --root_path ../data/test```
+8. Now run the model for inferernce using the command ```python test.py --cfg_file cfgs/models/kitti/TED-S.yaml --ckpt ted360.pth --root_path ../data/test```
 9. The structure of the file is :
 ```
 data/
